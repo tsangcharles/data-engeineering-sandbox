@@ -27,7 +27,7 @@ A comprehensive data warehouse environment designed for teaching data science st
 
 ### 1. Clone and Setup
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/tsangcharles/data-engeineering-sandbox
 cd data-engineering-sandbox
 ```
 
