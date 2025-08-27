@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  # Data Generation Service
+  data-generator:
+    build: ./data-generation
+    volumes:
+      - ./data:/app/data
+    command: >
+      sh -c "
+        if [ ! -f /app/data/users.csv ]; then
+          echo 'Generating dummy data...'
+          python generate_dummy_data.py
+          echo 'Data generation completed'
+        else
+          echo 'Data already exists, skipping generation'
+        fi
+        echo 'Data generation service completed successfully'
+        # Keep container running for health check
+        while true; do sleep 60; done
+      "
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "ls", "/app/data/users.csv"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL Data Warehouse
+  postgres:
+    image: postgres:15
+    depends_on:
+      data-generator:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: datawarehouse
+      POSTGRES_USER: dw_user
+      POSTGRES_PASSWORD: dw_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dw_user -d datawarehouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Airflow Webserver
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__WEBSERVER__AUTHENTICATE: 'True'
+      AIRFLOW__WEBSERVER__AUTH_BACKEND: 'airflow.auth.backend.basic_auth'
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: 'admin'
+      _AIRFLOW_WWW_USER_PASSWORD: 'admin'
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    ports:
+      - "8080:8080"
+    command: ["airflow", "webserver"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    depends_on:
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    command: scheduler
+    restart: unless-stopped
+
+  # Airflow Worker
+  airflow-worker:
+    image: apache/airflow:2.7.1
+    depends_on:
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://dw_user:dw_password@postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CORE__FERNET_KEY: ''
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+    command: celery worker
+    restart: unless-stopped
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Metabase
+  metabase:
+    image: metabase/metabase:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: dw_user
+      MB_DB_PASS: dw_password
+      MB_DB_HOST: postgres
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    restart: unless-stopped
+
+  # Test service to verify setup
+  test-service:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./test-html:/usr/share/nginx/html
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  metabase_data:

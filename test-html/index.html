@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Warehouse Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Data Warehouse Environment Test</h1>
+    
+    <div class="status success">
+        <strong>Test Service Working!</strong><br>
+        If you can see this page, Docker is running and port 8081 is accessible.
+    </div>
+    
+    <h2>Check Other Services:</h2>
+    
+    <div class="status info">
+        <strong>PostgreSQL:</strong> localhost:5432<br>
+        <strong>Airflow:</strong> <a href="http://localhost:8080" target="_blank">http://localhost:8080</a><br>
+        <strong>Metabase:</strong> <a href="http://localhost:3000" target="_blank">http://localhost:3000</a><br>
+        <strong>Test Service:</strong> <a href="http://localhost:8081" target="_blank">http://localhost:8081</a> (this page)
+    </div>
+    
+    <h2>Troubleshooting:</h2>
+    <ul>
+        <li>Check if Docker is running: <code>docker compose ps</code></li>
+        <li>View logs: <code>docker compose logs [service-name]</code></li>
+        <li>Restart services: <code>docker compose restart</code></li>
+        <li>Check port usage: <code>netstat -an | grep :8080</code> (or your OS equivalent)</li>
+    </ul>
+    
+    <h2>Next Steps:</h2>
+    <ol>
+        <li>Wait for all services to start (check with <code>docker compose ps</code>)</li>
+        <li>Try accessing Airflow at <a href="http://localhost:8080" target="_blank">http://localhost:8080</a></li>
+        <li>Default credentials: admin/admin</li>
+    </ol>
+</body>
+</html>
