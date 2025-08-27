@@ -51,7 +51,24 @@ The system automatically generates realistic dummy data on first run:
 
 **Data is automatically regenerated only if missing** - existing data is preserved across restarts.
 
-### 4. Access Services
+### 4. Setup Airflow Connection (One-Time Only)
+After the services are running, you need to set up the database connection in Airflow:
+
+**Option A: Use the setup script**
+```bash
+# For Linux/Mac:
+bash setup-airflow-connection.sh
+
+# For Windows:
+setup-airflow-connection.bat
+```
+
+**Option B: Manual setup**
+```bash
+docker exec data-engineering-sandbox-airflow-webserver-1 airflow connections add 'postgres_default' --conn-type 'postgres' --conn-host 'postgres' --conn-login 'dw_user' --conn-password 'dw_password' --conn-port 5432 --conn-schema 'datawarehouse'
+```
+
+### 5. Access Services
 - **Test Service**: http://localhost:8081 (verify setup is working)
 - **Airflow**: http://localhost:8080 (admin/admin)
 - **Metabase**: http://localhost:3000

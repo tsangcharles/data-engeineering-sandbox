@@ -10,6 +10,7 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
 import os
+import time
 
 default_args = {
     'owner': 'data_science_student',
@@ -23,7 +24,7 @@ default_args = {
 
 def load_csv_to_postgres(table_name, csv_file, schema='dimensions'):
     """
-    Load CSV data into PostgreSQL table
+    Load CSV data into PostgreSQL table with duplicate handling
     """
     # Get PostgreSQL connection
     pg_hook = PostgresHook(postgres_conn_id='postgres_default')
@@ -32,14 +33,52 @@ def load_csv_to_postgres(table_name, csv_file, schema='dimensions'):
     csv_path = f"/opt/airflow/data/{csv_file}"
     df = pd.read_csv(csv_path)
     
-    # Load data into PostgreSQL
-    pg_hook.insert_rows(
-        table=f"{schema}.{table_name}",
-        rows=df.values.tolist(),
-        target_fields=df.columns.tolist()
-    )
+    # Get raw connection for reliable operations
+    conn = pg_hook.get_conn()
+    cursor = conn.cursor()
     
-    print(f"Successfully loaded {len(df)} rows into {schema}.{table_name}")
+    try:
+        # Step 1: Clear existing data completely
+        print(f"Clearing existing data from {schema}.{table_name}")
+        cursor.execute(f"DELETE FROM {schema}.{table_name};")
+        conn.commit()
+        print(f"Successfully cleared {schema}.{table_name}")
+        
+        # Step 2: Disable foreign key checks temporarily if needed
+        if schema == 'dimensions':
+            cursor.execute("SET session_replication_role = replica;")
+        
+        # Step 3: Insert data row by row to handle any remaining conflicts
+        columns = df.columns.tolist()
+        placeholders = ', '.join(['%s'] * len(columns))
+        insert_sql = f"INSERT INTO {schema}.{table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+        
+        successful_inserts = 0
+        for index, row in df.iterrows():
+            try:
+                cursor.execute(insert_sql, row.tolist())
+                successful_inserts += 1
+            except Exception as row_error:
+                print(f"Warning: Skipped row {index} due to conflict: {row_error}")
+                continue
+        
+        # Step 4: Re-enable foreign key checks
+        if schema == 'dimensions':
+            cursor.execute("SET session_replication_role = DEFAULT;")
+        
+        conn.commit()
+        print(f"Successfully loaded {successful_inserts}/{len(df)} rows into {schema}.{table_name}")
+        
+        if successful_inserts < len(df):
+            print(f"Note: {len(df) - successful_inserts} rows were skipped due to conflicts")
+            
+    except Exception as e:
+        conn.rollback()
+        print(f"Error during data loading: {e}")
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
 
 def load_fact_table_data():
     """

@@ -4,6 +4,8 @@
 data/
 *.csv
 
+# Note: setup-airflow-connection.* scripts are intentionally tracked
+
 # Docker volumes and container data
 postgres_data/
 metabase_data/
