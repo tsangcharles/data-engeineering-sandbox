@@ -273,28 +273,6 @@ Students can practice answering these real-world questions:
    - How does performance vary by day of week?
    - What's the average session duration?
 
-## 🎓 Course Integration
-
-### Week 1: Data Warehouse Fundamentals
-- Understanding the schema design
-- Basic SQL queries
-- Data exploration
-
-### Week 2: ETL Processes
-- Running Airflow DAGs
-- Understanding data pipelines
-- Data quality checks
-
-### Week 3: Advanced Analytics
-- Complex SQL queries
-- Business metrics calculation
-- Performance optimization
-
-### Week 4: Business Intelligence
-- Metabase dashboard creation
-- Data visualization
-- Business insights presentation
-
 ## 🐛 Troubleshooting
 
 ### Common Issues
